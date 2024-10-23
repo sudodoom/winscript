@@ -1,0 +1,10 @@
+#Intro 2, for loops
+#CONVERT THIS FILE TO A .ps1 FILE
+
+#TODO: Create a int type variable called "fish"
+
+#TODO: Create a function called "Caught-Fish"
+
+#TODO: Create a for loop that runs between 5-15 times. The for loop should increment the fish variable by 1 to 3 every iteration and should print what the current interation is and value of fish
+
+#TODO: Outside of the function, print the final value of fish. The text colour should be red.

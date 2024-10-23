@@ -1,0 +1,14 @@
+#Intro to PS - variables and functions
+#CONVERT THIS FILE TO A .ps1 FILE
+
+#TODO: Create two variables that are set to a number between 1 and 10
+
+
+#TODO: Create a function that takes two parameters and add those parameters together. The function should return the result of adding the two parameters together
+
+
+#TODO: Set a variable to the value returned from the function above and print the variable
+
+
+
+#Extra: Implement error handling when trying to add two variables of different types (hint: try,catch)
