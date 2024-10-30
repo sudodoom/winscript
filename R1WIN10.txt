@@ -1,0 +1,131 @@
+Get-LocalUser | Out-File $env:TMP\userlist.txt
+Get-LocalGroupMember -Group Administrators | Out-File $env:TMP\adminlist.txt
+$featuresList = @("IIS-FTPSERVER")
+$exemptedUsers = "Administrator","DefaultAccount","Guest","WDAGUtilityAccount",(whoami).Split("\")[1]
+ 
+ 
+function CheckFeatures {
+    foreach($feature in $featuresList){
+        $feat = Get-WindowsOptionalFeature -Online -FeatureName $feature
+        switch($feat.State){
+            "Enabled" {Write-Host "$feature is enabled" -ForegroundColor Green}
+            "Disabled" {Write-Host "$feature is disabled" -ForegroundColor Red}
+            default {Write-Host "$feature cannot be checked!" -ForegroundColor Yellow}
+        }
+    }
+}
+ 
+function DownloadChrome {
+    Write-Host "Current version of chrome is" (Get-Item "C:\Program Files\Google\Chrome\Application\chrome.exe").VersionInfo.FileVersion
+    Write-Host "Downloading latest version of Chrome!" -ForegroundColor DarkGreen
+    Invoke-WebRequest -Uri "http://dl.google.com/chrome/install/latest/chrome_installer.exe" -OutFile ~\Downloads\ChromeSetup.exe
+    #Start-Process -FilePath ~\Downloads\ChromeSetup.exe -ArgumentList "/silent", "/install" -NoNewWindow -Wait
+}
+ 
+function createFiles($name){
+    New-Item "$name.txt"
+    Write-Host "Put list of authorized users in each script" -ForegroundColor Yellow
+    Start-Process 'C:\WINDOWS\system32\notepad.exe' ".\$name.txt" -Wait
+} 
+ 
+function UserManagement {
+    if (!(Test-Path -Path .\usersd.txt)){
+        createFiles("usersd")
+    }
+    $password = ConvertTo-SecureString -AsPlainText "Blu3berryareGRE@T!!" -Force
+    foreach($user in Get-LocalUser){
+        if(!(Select-String -Path .\usersd.txt -Pattern $user.name) -and (!($exemptedUsers.Contains($user.name)))){
+            write-host $user" is unauthorized! Removing user..." -ForegroundColor Red
+            Remove-LocalUser $user | Out-Null
+        }
+    }
+    if(Get-Content -Path .\usersd.txt){
+        foreach($user in (Get-Content .\usersd.txt)){
+ 
+            if(!(Select-String -Path $env:TMP\userlist.txt -Pattern $user)){
+                Write-Host $user" not in list. Adding user..." -ForegroundColor Yellow
+                New-LocalUser -Name $user -Password $password | Out-Null
+            }
+        }
+    }else{Write-Host "FILE EMPTY"}
+}
+ 
+function AdminManagement{
+    if (!(Test-Path -Path .\adminsd.txt)){
+        createFiles("adminsd")
+    }
+    foreach($user in Get-LocalGroupMember -Group Administrators){
+        $user = ("$user").Split("\")[1]
+        if(!(Select-String -Path .\adminsd.txt -Pattern $user) -and (!($exemptedUsers.Contains($user)))){
+            write-host $user" is unauthorized! Removing user..." -ForegroundColor Red
+            Remove-LocalGroupMember -Group Administrators -Member $user | Out-Null
+        }
+    }
+    if(Get-Content -Path .\adminsd.txt){
+        Get-Content $env:TMP\adminlist.txt
+ 
+        foreach($user in (Get-Content -Path .\adminsd.txt)){
+            if(!(Select-String -Path $env:TMP\adminlist.txt -Pattern $user)){
+                Write-Host $user" not in list. Adding user..." -ForegroundColor Yellow
+                Add-LocalGroupMember -Group Administrators -Member $user | Out-Null
+            }
+        }
+ 
+    }else{Write-Host "FILE EMPTY"}
+}
+ 
+function ChangePasswords {
+    Write-Host "ChangePasswords Started" -ForegroundColor Yellow
+    # Get the username of the current user
+    $currentUsername = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split("\")[1]
+ 
+    # Get a list of all user accounts on the system
+    $userList = Get-LocalUser
+ 
+    # Loop through the list of user accounts and change their passwords
+    foreach ($user in $userList) {
+        $username = $user.Name
+ 
+        if ($username -ne $currentUsername -and $username -ne "DefaultAccount" -and $username -ne "WDAGUtilityAccount") {
+            try {
+                $staticPassword = "Blu3berryareGRE@T!!"  # Set the new password here
+                # Convert the new password to a SecureString
+                $securePassword = ConvertTo-SecureString -String $staticPassword -AsPlainText -Force
+ 
+                # Change the user's password
+                Set-LocalUser -Name $username -Password $securePassword
+                Write-Host "Password for user $username has been changed." -ForegroundColor Green
+            } catch {
+                Write-Host "Error changing password for user $username" -ForegroundColor Red
+            }
+        }
+    }
+}
+ 
+function SecurityPolicies {
+    Write-Host "Security Policies Started" -ForegroundColor Yellow
+
+    #Checks the current dword value of local policies in registry
+    function checkPolicy{
+	param(
+		[string] $path,
+		[string] $dword
+	)
+	switch ((Get-ItemProperty -Path $path).$dword){
+            1{Write-Host "$dword is enabled"}
+            0{Write-Host "$dword is disabled"}
+            default{Write-Host "Could not find path ($path) or policy ($dword)!"}
+        } 
+    }
+    checkPolicy -path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -dword "restrictanonymous"
+    checkPolicy =path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -dword "restrictanonymoussam"
+    checkPolicy -path "HKLM:\SYSTEM\CurrentControlSet\Control\Remote Assistance" -dword "fAllowToGetHelp"
+    checkPolicy -path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -dword "LimitBlankPasswordUse"
+    Write-Host "Maximum password age is"(Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters").MaximumPasswordAge
+    
+    #Gets the current lockout and duration threshold
+    net accounts | select-string "lockout threshold"
+    net accounts | select-string "lockout duration"
+    #Sets the lockout threshold to 15
+    #net accounts /lockoutthreshold:15
+}
